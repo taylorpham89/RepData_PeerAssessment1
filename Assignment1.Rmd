@@ -1,0 +1,162 @@
+---
+title: "Assignment1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##A. Loading and preprocessing the data
+###1.Load the data (i.e. read.csv())
+Load ggplot2 and plyr library
+```{r}
+library(ggplot2)
+library(plyr)
+```
+Read data into a new data frame called data
+
+```{r}
+data <- read.csv("activity.csv")
+```
+
+
+###2.Process/transform the data (if necessary) into a format suitable for your analysis
+
+```{r}
+#Format the date column into date class
+data$date <- as.Date(data$date)
+#Sort out the NA steps value for further calculation 
+na <- is.na(data$steps)
+cleanData <- data[!na,]
+```
+
+##B. What is mean total number of steps taken per day?
+
+
+###1.Calculate the total number of steps taken per day
+
+Calculate total number of steps based on the clean data and store in the variable totalSPD
+
+```{r}
+totalSPD <- aggregate(cleanData$steps, by=list(cleanData$date),sum)
+#review the newly created dataframe
+head(totalSPD)
+#rename the column
+totalSPD <- rename(totalSPD, c("Group.1"="Date","x"="totalsteps"))
+#review once again
+head(totalSPD)
+```
+    
+###2.Make a histogram of the total number of steps taken each day
+```{r}
+#create object g as layout for the histogram
+g <- ggplot(totalSPD, aes(x=totalsteps))
+#choose color, dimension and create labels for the histpgram
+g + geom_histogram(fill="lightblue", binwidth = 900) + labs(title = "Total Daily Steps", x="Total Steps", y="Frequency")
+```
+    
+###3.Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+#Mean of steps
+mean_og <-mean(totalSPD$totalsteps)
+#Median of steps
+median_og <-median(totalSPD$totalsteps)
+```
+
+##C. What is the average daily activity pattern?
+
+###1.Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+#create a new data frame avgSBI(average steps by interval) based on the cleanData 
+avgSBI <- aggregate(cleanData$steps, by=list(cleanData$interval),mean)
+#rename the column
+avgSBI <- rename(avgSBI, c("Group.1"="interval","x"="averagesteps"))
+#review the data frame
+head(avgSBI)
+#create the new object "p" to make the plot as required
+p <- ggplot(avgSBI, aes(x=interval,y=averagesteps), type="l")
+# create the time series plot
+p + geom_line(color="blue") + labs(title="Average of Steps by Interval", x="Interval", y="Average Steps")
+```
+
+###2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+# Find the max Average steps value and store it in the new variable "maxSteps"
+maxSteps <- avgSBI[which.max(avgSBI$averagesteps),]
+# Review the value
+maxSteps
+```
+##D. Imputing missing values
+
+###1.Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r}
+# Count the total number of missing value by using the variable "na" defined in the A part of the assignment
+sum(na)
+
+```
+###2.Devise a strategy for filling in all of the missing values in the dataset
+```{r}
+#The average steps by Interval will be used to replace the na value 
+#Create a new variable meanSI to store the average steps by interval based on the original data frame
+meanSI <- aggregate(steps~interval,data,FUN=mean)
+#Create a new dataframe that merges the original data frame with the means of steps by interval
+newData <- merge(x=data,y=meanSI,by="interval")
+#Take a sneakpeak at the new dataframe:
+str(newData)
+#Replace na steps values in newData with average steps by interval, create a new column called steps
+newData$steps <- ifelse(is.na(newData$steps.x),newData$steps.y,newData$steps.x)
+```
+
+###3.Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+
+head(newData)
+
+```
+
+###4.Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day 
+
+```{r}
+#Total steps by day based on new data frame
+totalSPD_new <- aggregate(steps~date,newData,FUN=sum)
+##Set up plot to compare old and new data frame
+par(mfrow=c(1,2))
+hist(totalSPD_new$steps, col="blue", ylim=c(0,35),xlab = "Steps", ylab ="Frequency", 
+     main= "Total Numbers of Steps Each Day (updated data frame)", cex.main=0.7)
+hist(totalSPD$totalsteps, col="green", ylim=c(0,35),xlab = "Steps", ylab ="Frequency", 
+     main= "Total Numbers of Steps Each Day (original data frame)",cex.main=0.7)
+
+
+```
+```{r}
+#comparing the old and new mean/median between the original and updated data frame
+par(mfrow=c(2,1))
+newmean <- mean(totalSPD_new$steps)
+newmedian <- median(totalSPD_new$steps)
+paste("New mean:  ",round(newmean,2),", ","Original mean  :",round(mean_og,2),"Difference  :", round(newmean-mean_og,2))
+paste("New median:  ",round(newmedian,2),", ","Original median  :",round(median_og,2),"Difference  :", round(newmedian-median_og,2))
+```
+
+##E. Are there differences in activity patterns between weekdays and weekends?
+
+###1.Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r}
+#Install packages "chron" to use the function is.weekend
+library(chron)
+#Create a new variable "day" to sort out Weekday/Weekend in the new data frame
+newData$day <- ifelse(is.weekend(newData$date),"Weekend","Weekday")
+head(newData)
+#Create new table with average steps over interval and day of week
+meanSI_new <- aggregate(steps~interval+day,newData,FUN=mean)
+head(meanSI_new)
+
+
+```
+###2.Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis)
+```{r}
+#Create plot to compare activity pattern between weekday and weekend
+ggplot(meanSI_new, aes(x=interval, y=steps),type="l") + geom_line(color="blue", size=0.5) +facet_grid(day~.) +labs(x="Interval", y="Average Steps", title = "Activity Pattern")
+```
